@@ -38,6 +38,15 @@
   }
 \msg_new:nnn { temperleylieb } { incomplete }
   { Incomplete~generator~at~the~end~of~a~Temperley--Lieb~word. }
+\msg_new:nnn { temperleylieb } { standalone-formula }
+  {
+    A~diagram~is~used~in~a~formula~that~the~`standalone'~class~does~not~
+    turn~into~a~page:~with~its~`tikz'~option~only~TikZ~pictures,~
+    \iow_char:N\\[...\iow_char:N\\]~and~\iow_char:N\\(...\iow_char:N\\)~
+    become~(cropped)~pages.~Write~the~formula~with~
+    \iow_char:N\\[...\iow_char:N\\]~or~\iow_char:N\\(...\iow_char:N\\),~
+    or~use~\iow_char:N\\documentclass[varwidth]{standalone}~instead.
+  }
 
 % ---------------------------------------------------------------------------
 % Variables
@@ -875,8 +884,47 @@
       }
   }
 \cs_new_protected:Npn \__tldiag_picture:nn #1#2
-  { \begin{tikzpicture} [ #1 ] #2 \end{tikzpicture} }
+  {
+    \__tldiag_standalone_nest:
+    \begin{tikzpicture} [ #1 ] #2 \end{tikzpicture}
+  }
 \cs_generate_variant:Nn \__tldiag_picture:nn { VV }
+
+% ---------------------------------------------------------------------------
+% The standalone class
+%
+% With the `tikz' (or `multi=tikzpicture') option, standalone makes every
+% top-level tikzpicture a cropped page of its own, which cannot be done from
+% inside a formula.  The diagrams are parts of formulas, so instead the
+% formula is made the page: standalone's `math' handling (the same as its
+% `math' option) turns \[...\] and \(...\) into pages, and a diagram inside a
+% formula is marked as nested (\sa@internal > 0) so that it never tries to
+% start a page itself.
+% ---------------------------------------------------------------------------
+\cs_new_protected:Npn \__tldiag_standalone_nest:
+  {
+    \bool_lazy_and:nnT
+      { \cs_if_exist_p:N \sa@orig@tikzpicture }
+      { \mode_if_math_p: }
+      {
+        \int_compare:nNnT \sa@internal = 0
+          {
+            \msg_warning:nn { temperleylieb } { standalone-formula }
+            \int_incr:N \sa@internal
+          }
+      }
+  }
+\cs_new_protected:Npn \__tldiag_standalone_math:
+  {
+    \bool_lazy_all:nT
+      {
+        { \cs_if_exist_p:N \sa@orig@tikzpicture }
+        { \cs_if_exist_p:N \sa@math }
+        { ! \legacy_if_p:n { sa@math } }
+      }
+      { \sa@math }
+  }
+\AtBeginDocument { \__tldiag_standalone_math: }
 
 \cs_new_protected:Npn \__tldiag_setup:nn #1#2
   {
