@@ -1,0 +1,41 @@
+% Reproduces the figures of the Wikipedia article on Temperley--Lieb algebras.
+\documentclass[11pt]{article}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath}
+\usepackage{temperleylieb}
+\usepackage{parskip}
+
+\tlset{box=fill, gap=0.15, strand style={line width=1.3pt}}
+
+\begin{document}
+
+The generators of $TL_5(\delta)$ are:
+\[ \TLgenerators{5} \]
+From left to right, the unit $1$ and the generators $e_1, e_2, e_3, e_4$.
+
+Multiplication on basis elements can be performed by concatenation: placing
+two rectangles side by side, and replacing any closed loops by a factor
+$\delta$, for example
+$e_1e_4e_3e_2 \times e_2e_4e_3 = \delta\, e_1e_4e_3e_2e_4e_3$:
+\[
+  \TL{5}{e_1 e_4 e_3 e_2} \times \TL{5}{e_2 e_4 e_3}
+  = \TL[boundaries]{5}{e_1 e_4 e_3 e_2 e_2 e_4 e_3}
+  = \TL[reduce]{5}{e_1 e_4 e_3 e_2 e_2 e_4 e_3}
+\]
+
+The Jones relations can be seen graphically:
+\begin{gather*}
+  \TL{3}{e_1 e_1} = \delta\, \TL{3}{e_1} \\
+  \TL{3}{e_1 e_2 e_1} = \TL{3}{e_1} \\
+  \TL{4}{e_1 e_3} = \TL{4}{e_3 e_1}
+\end{gather*}
+
+The five basis elements of $TL_3(\delta)$ are the following:
+\[ \TL[separate, reduce]{3}{1 e_2 e_1 {e_1 e_2} {e_2 e_1}} \]
+From left to right, the unit $1$, the generators $e_2$, $e_1$, and
+$e_1e_2$, $e_2e_1$.
+
+The same, drawn vertically and with names:
+\[ \TL[vertical, separate, reduce, names, gap=0.4]{3}{1 e_2 e_1 {e_1 e_2} {e_2 e_1}} \]
+
+\end{document}

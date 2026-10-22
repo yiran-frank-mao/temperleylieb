@@ -1,0 +1,956 @@
+% temperleylieb.sty -- Temperley--Lieb diagrams with TikZ
+%
+% Copyright (C) 2026
+% This work may be distributed and/or modified under the conditions of the
+% LaTeX Project Public License, version 1.3c or later.
+%
+\NeedsTeXFormat{LaTeX2e}[2020/10/01]
+\RequirePackage{tikz}
+\ProvidesExplPackage{temperleylieb}{2026/10/21}{1.0}
+  {Temperley--Lieb algebra diagrams}
+
+% ---------------------------------------------------------------------------
+% Variants and messages
+% ---------------------------------------------------------------------------
+\cs_generate_variant:Nn \prop_put:Nnn { Nee , Nen }
+\cs_generate_variant:Nn \clist_put_right:Nn { Ne }
+\regex_const:Nn \c__tldiag_int_regex { \A \s* [0-9]+ \s* \Z }
+\cs_generate_variant:Nn \prop_get:NnN { Ne }
+\prg_generate_conditional_variant:Nnn \prop_get:NnN { Ne } { T , F , TF }
+\prg_generate_conditional_variant:Nnn \prop_if_in:Nn { Ne } { T , F , TF }
+
+\msg_new:nnn { temperleylieb } { bad-n }
+  { The~number~of~strands~must~be~a~positive~integer~(got~`#1'). }
+\msg_new:nnn { temperleylieb } { bad-index }
+  {
+    Generator~e_{#1}~does~not~exist~in~TL_{#2}.~
+    Valid~indices~are~0~(the~identity)~to~#3.
+  }
+\msg_new:nnn { temperleylieb } { not-an-index }
+  { `#1'~is~not~a~valid~generator~index~(expected~a~non-negative~integer). }
+\msg_new:nnn { temperleylieb } { expect-underscore }
+  { Expected~`_'~after~`e',~but~found~`#1'. }
+\msg_new:nnn { temperleylieb } { unexpected }
+  {
+    Unexpected~`#1'~in~a~Temperley--Lieb~word.~
+    Write~words~like~`e_1~e_3~e_2',~use~`1'~or~`e_0'~for~the~identity~
+    and~`|'~to~separate~factors.
+  }
+\msg_new:nnn { temperleylieb } { incomplete }
+  { Incomplete~generator~at~the~end~of~a~Temperley--Lieb~word. }
+
+% ---------------------------------------------------------------------------
+% Variables
+% ---------------------------------------------------------------------------
+\int_new:N \l__tldiag_n_int
+\int_new:N \l__tldiag_m_int
+\int_new:N \l__tldiag_k_int
+\int_new:N \l__tldiag_a_int
+\int_new:N \l__tldiag_b_int
+\int_new:N \l__tldiag_c_int
+\int_new:N \l__tldiag_v_int
+\int_new:N \l__tldiag_w_int
+\int_new:N \l__tldiag_start_int
+\int_new:N \l__tldiag_lvl_int
+\int_new:N \l__tldiag_maxL_int
+\int_new:N \l__tldiag_maxR_int
+\int_new:N \l__tldiag_shift_int
+\int_new:N \l__tldiag_loops_int
+\int_new:N \l__tldiag_state_int
+\int_new:N \l__tldiag_depth_int
+\int_new:N \g__tldiag_loops_int
+
+\fp_new:N \l__tldiag_S_fp
+\fp_new:N \l__tldiag_L_fp
+\fp_new:N \l__tldiag_gap_fp
+\fp_new:N \l__tldiag_scale_fp
+\fp_new:N \l__tldiag_T_fp
+\fp_new:N \l__tldiag_off_fp
+\fp_new:N \l__tldiag_Dl_fp
+\fp_new:N \l__tldiag_Dr_fp
+\fp_new:N \l__tldiag_wd_fp
+
+\bool_new:N \l__tldiag_vertical_bool
+\bool_new:N \l__tldiag_reverse_bool
+\bool_new:N \l__tldiag_separate_bool
+\bool_new:N \l__tldiag_reduce_bool
+\bool_new:N \l__tldiag_names_bool
+\bool_new:N \l__tldiag_labels_bool
+\bool_new:N \l__tldiag_boundaries_bool
+\bool_new:N \l__tldiag_coefficient_bool
+\bool_new:N \l__tldiag_right_bool
+\bool_new:N \l__tldiag_go_bool
+\bool_new:N \l__tldiag_first_bool
+\bool_new:N \l__tldiag_draw_bool
+
+\tl_new:N \l__tldiag_separator_tl
+\tl_new:N \l__tldiag_loop_tl
+\tl_new:N \l__tldiag_box_tl
+\tl_new:N \l__tldiag_tikz_tl
+\tl_new:N \l__tldiag_baseline_tl
+\tl_new:N \l__tldiag_draw_tl
+\tl_new:N \l__tldiag_names_tl
+\tl_new:N \l__tldiag_opts_tl
+\tl_new:N \l__tldiag_tmp_tl
+\tl_new:N \l__tldiag_tmpb_tl
+\tl_new:N \l__tldiag_word_tl
+\tl_new:N \l__tldiag_path_tl
+
+\seq_new:N \l__tldiag_factors_seq
+\seq_new:N \l__tldiag_word_seq
+\clist_new:N \l__tldiag_factor_clist
+
+\prop_new:N \l__tldiag_R_prop
+\prop_new:N \l__tldiag_L_prop
+\prop_new:N \l__tldiag_visited_prop
+\prop_new:N \l__tldiag_match_prop
+\prop_new:N \l__tldiag_level_prop
+
+\box_new:N \l__tldiag_tmp_box
+
+% ---------------------------------------------------------------------------
+% Options
+% ---------------------------------------------------------------------------
+\keys_define:nn { temperleylieb }
+  {
+    orientation .choice: ,
+    orientation / horizontal .code:n =
+      \bool_set_false:N \l__tldiag_vertical_bool ,
+    orientation / vertical .code:n =
+      \bool_set_true:N \l__tldiag_vertical_bool ,
+    horizontal .meta:n = { orientation = horizontal } ,
+    horizontal .value_forbidden:n = true ,
+    vertical .meta:n = { orientation = vertical } ,
+    vertical .value_forbidden:n = true ,
+    reverse .bool_set:N = \l__tldiag_reverse_bool ,
+    reverse .default:n = true ,
+
+    mode .choice: ,
+    mode / compose .code:n = \bool_set_false:N \l__tldiag_separate_bool ,
+    mode / separate .code:n = \bool_set_true:N \l__tldiag_separate_bool ,
+    compose .meta:n = { mode = compose } ,
+    compose .value_forbidden:n = true ,
+    separate .meta:n = { mode = separate } ,
+    separate .value_forbidden:n = true ,
+    reduce .bool_set:N = \l__tldiag_reduce_bool ,
+    reduce .default:n = true ,
+
+    strand~sep .fp_set:N = \l__tldiag_S_fp ,
+    length .fp_set:N = \l__tldiag_L_fp ,
+    gap .fp_set:N = \l__tldiag_gap_fp ,
+    separator .tl_set:N = \l__tldiag_separator_tl ,
+    names .bool_set:N = \l__tldiag_names_bool ,
+    names .default:n = true ,
+    labels .bool_set:N = \l__tldiag_labels_bool ,
+    labels .default:n = true ,
+    boundaries .bool_set:N = \l__tldiag_boundaries_bool ,
+    boundaries .default:n = true ,
+    coefficient .bool_set:N = \l__tldiag_coefficient_bool ,
+    coefficient .default:n = true ,
+    loop~value .tl_set:N = \l__tldiag_loop_tl ,
+
+    box .choice: ,
+    box / frame .code:n = \tl_set:Nn \l__tldiag_box_tl { tl~box~frame } ,
+    box / fill  .code:n = \tl_set:Nn \l__tldiag_box_tl { tl~box~fill } ,
+    box / none  .code:n = \tl_set:Nn \l__tldiag_box_tl { tl~box~none } ,
+
+    scale .code:n =
+      {
+        \fp_set:Nn \l__tldiag_scale_fp {#1}
+        \tl_put_right:Nn \l__tldiag_tikz_tl { , scale = #1 }
+      } ,
+    baseline .tl_set:N = \l__tldiag_baseline_tl ,
+    tikz .code:n = \tl_put_right:Nn \l__tldiag_tikz_tl { , #1 } ,
+    strand~style .code:n =
+      \tikzset { tl~strand/.append~style = {#1} } ,
+    box~style .code:n =
+      \tikzset { tl~box/.append~style = {#1} } ,
+  }
+
+\keys_set:nn { temperleylieb }
+  {
+    horizontal ,
+    compose ,
+    reverse = false ,
+    reduce = false ,
+    strand~sep = 0.4 ,
+    length = 0.6 ,
+    gap = 0.25 ,
+    separator = ,
+    names = false ,
+    labels = false ,
+    boundaries = false ,
+    coefficient = true ,
+    loop~value = \delta ,
+    box = frame ,
+    baseline = -0.5ex ,
+  }
+\fp_set:Nn \l__tldiag_scale_fp { 1 }
+
+% ---------------------------------------------------------------------------
+% Coordinates
+%
+% A factor is drawn in local coordinates (t, s): t runs along the direction
+% of composition (0 <= t <= T), s across the strands (strand j sits at
+% s = (j - 1/2) S).  These are mapped to the page according to the options.
+% ---------------------------------------------------------------------------
+\cs_new:Npn \__tldiag_s:n #1 { ( (#1) - 0.5 ) * \l__tldiag_S_fp }
+
+\cs_new:Npn \__tldiag_x:nn #1#2
+  {
+    \l__tldiag_off_fp +
+    \bool_if:NTF \l__tldiag_vertical_bool
+      { (#2) }
+      {
+        \bool_if:NTF \l__tldiag_reverse_bool
+          { \l__tldiag_T_fp - (#1) } { (#1) }
+      }
+  }
+\cs_new:Npn \__tldiag_y:nn #1#2
+  {
+    \bool_if:NTF \l__tldiag_vertical_bool
+      {
+        \bool_if:NTF \l__tldiag_reverse_bool
+          { (#1) - \l__tldiag_T_fp / 2 }
+          { \l__tldiag_T_fp / 2 - (#1) }
+      }
+      { \l__tldiag_n_int * \l__tldiag_S_fp / 2 - (#2) }
+  }
+\cs_new:Npn \__tldiag_pt:nn #1#2
+  {
+    ( \fp_eval:n { round ( \__tldiag_x:nn {#1} {#2} , 4 ) } ,
+      \fp_eval:n { round ( \__tldiag_y:nn {#1} {#2} , 4 ) } )
+  }
+\cs_new:Npn \__tldiag_page_width:
+  {
+    \bool_if:NTF \l__tldiag_vertical_bool
+      { \l__tldiag_n_int * \l__tldiag_S_fp }
+      { \l__tldiag_T_fp }
+  }
+
+\cs_new_protected:Npn \__tldiag_emit:n #1
+  { \tl_put_right:Ne \l__tldiag_draw_tl {#1} }
+
+% Strand j from t = #1 to t = #2.
+\cs_new_protected:Npn \__tldiag_line:nnn #1#2#3
+  {
+    \__tldiag_emit:n
+      {
+        \exp_not:N \draw [ tl~strand ]
+          \__tldiag_pt:nn {#1} { \__tldiag_s:n {#3} } --
+          \__tldiag_pt:nn {#2} { \__tldiag_s:n {#3} } ;
+      }
+  }
+% Arc at t = #1 joining strands #3 and #4; #2 is the (signed) control offset.
+\cs_new_protected:Npn \__tldiag_arc:nnnn #1#2#3#4
+  {
+    \__tldiag_emit:n
+      {
+        \exp_not:N \draw [ tl~strand ]
+          \__tldiag_pt:nn {#1} { \__tldiag_s:n {#3} }
+          .. ~ controls ~ \__tldiag_pt:nn { #1 + (#2) } { \__tldiag_s:n {#3} }
+          ~ and ~ \__tldiag_pt:nn { #1 + (#2) } { \__tldiag_s:n {#4} } ~ ..
+          \__tldiag_pt:nn {#1} { \__tldiag_s:n {#4} } ;
+      }
+  }
+
+% ---------------------------------------------------------------------------
+% Parsing words such as  e_1 e_4 e_3 e_2 | e_2 e_4 e_3
+% ---------------------------------------------------------------------------
+\cs_new_protected:Npn \__tldiag_parse:n #1
+  {
+    \seq_clear:N \l__tldiag_factors_seq
+    \clist_clear:N \l__tldiag_factor_clist
+    \int_zero:N \l__tldiag_state_int
+    \int_zero:N \l__tldiag_depth_int
+    \__tldiag_parse_items:n {#1}
+    \int_compare:nNnF \l__tldiag_state_int = 0
+      {
+        \msg_error:nn { temperleylieb } { incomplete }
+        \int_zero:N \l__tldiag_state_int
+      }
+    \bool_if:NTF \l__tldiag_separate_bool
+      {
+        \seq_if_empty:NT \l__tldiag_factors_seq
+          { \__tldiag_end_factor: }
+      }
+      { \__tldiag_end_factor: }
+  }
+\cs_new_protected:Npn \__tldiag_parse_items:n #1
+  { \tl_map_inline:nn {#1} { \__tldiag_parse_item:n {##1} } }
+\cs_new_protected:Npn \__tldiag_parse_item:n #1
+  {
+    \int_case:nn { \l__tldiag_state_int }
+      {
+        { 0 } { \__tldiag_parse_start:n {#1} }
+        { 1 }
+          {
+            \str_if_eq:nnTF {#1} { _ }
+              { \int_set:Nn \l__tldiag_state_int { 2 } }
+              {
+                \msg_error:nnn { temperleylieb } { expect-underscore } {#1}
+                \int_zero:N \l__tldiag_state_int
+              }
+          }
+        { 2 } { \__tldiag_parse_index:n {#1} }
+      }
+  }
+\cs_new_protected:Npn \__tldiag_parse_start:n #1
+  {
+    \tl_if_single_token:nTF {#1}
+      {
+        \str_case:nnF {#1}
+          {
+            { e } { \int_set:Nn \l__tldiag_state_int { 1 } }
+            { 1 } { \__tldiag_add_gen:n { 0 } }
+            { | }
+              {
+                \int_compare:nNnT \l__tldiag_depth_int = 0
+                  { \__tldiag_end_factor: }
+              }
+            { * } { }
+            { . } { }
+            { \cdot } { }
+            { \times } { }
+            { \circ } { }
+            { \, } { }
+          }
+          { \msg_error:nnn { temperleylieb } { unexpected } {#1} }
+      }
+      {
+        \int_incr:N \l__tldiag_depth_int
+        \__tldiag_parse_items:n {#1}
+        \int_decr:N \l__tldiag_depth_int
+        \int_compare:nNnF \l__tldiag_state_int = 0
+          {
+            \msg_error:nn { temperleylieb } { incomplete }
+            \int_zero:N \l__tldiag_state_int
+          }
+        \bool_lazy_and:nnT
+          { \l__tldiag_separate_bool }
+          { \int_compare_p:nNn \l__tldiag_depth_int = 0 }
+          { \__tldiag_end_factor: }
+      }
+  }
+\cs_new_protected:Npn \__tldiag_parse_index:n #1
+  {
+    \int_zero:N \l__tldiag_state_int
+    \regex_match:NnTF \c__tldiag_int_regex {#1}
+      {
+        \int_compare:nNnTF {#1} < \l__tldiag_n_int
+          { \__tldiag_add_gen:n { \int_eval:n {#1} } }
+          {
+            \msg_error:nneee { temperleylieb } { bad-index }
+              { \int_eval:n {#1} } { \int_use:N \l__tldiag_n_int }
+              { \int_eval:n { \l__tldiag_n_int - 1 } }
+          }
+      }
+      { \msg_error:nnn { temperleylieb } { not-an-index } {#1} }
+  }
+\cs_new_protected:Npn \__tldiag_add_gen:n #1
+  {
+    \clist_put_right:Ne \l__tldiag_factor_clist {#1}
+    \bool_lazy_and:nnT
+      { \l__tldiag_separate_bool }
+      { \int_compare_p:nNn \l__tldiag_depth_int = 0 }
+      { \__tldiag_end_factor: }
+  }
+\cs_new_protected:Npn \__tldiag_end_factor:
+  {
+    \seq_put_right:NV \l__tldiag_factors_seq \l__tldiag_factor_clist
+    \clist_clear:N \l__tldiag_factor_clist
+  }
+
+% ---------------------------------------------------------------------------
+% Composition: trace the strands of a word and find the reduced diagram.
+%
+% Vertex v = c * n + (j - 1) is strand j on column c (0 <= c <= m).
+% Generator number k (1-based) sits between columns k-1 and k.  Every vertex
+% has a neighbour through the generator on its right (R) and/or left (L).
+% ---------------------------------------------------------------------------
+\cs_new_protected:Npn \__tldiag_add_edges:n #1
+  {
+    \int_set:Nn \l__tldiag_a_int
+      { ( \l__tldiag_k_int - 1 ) * \l__tldiag_n_int }
+    \int_set:Nn \l__tldiag_b_int { \l__tldiag_a_int + \l__tldiag_n_int }
+    \int_step_inline:nnn { 0 } { \l__tldiag_n_int - 1 }
+      {
+        \bool_if:nT
+          {
+            \int_compare_p:nNn {#1} = 0 ||
+            ( \int_compare_p:n { ##1 != #1 - 1 } &&
+              \int_compare_p:n { ##1 != #1 } )
+          }
+          {
+            \prop_put:Nee \l__tldiag_R_prop
+              { \int_eval:n { \l__tldiag_a_int + ##1 } }
+              { \int_eval:n { \l__tldiag_b_int + ##1 } }
+            \prop_put:Nee \l__tldiag_L_prop
+              { \int_eval:n { \l__tldiag_b_int + ##1 } }
+              { \int_eval:n { \l__tldiag_a_int + ##1 } }
+          }
+      }
+    \int_compare:nNnT {#1} > 0
+      {
+        \__tldiag_pair:Nnn \l__tldiag_R_prop
+          { \l__tldiag_a_int + #1 - 1 } { \l__tldiag_a_int + #1 }
+        \__tldiag_pair:Nnn \l__tldiag_L_prop
+          { \l__tldiag_b_int + #1 - 1 } { \l__tldiag_b_int + #1 }
+      }
+  }
+\cs_new_protected:Npn \__tldiag_pair:Nnn #1#2#3
+  {
+    \prop_put:Nee #1 { \int_eval:n {#2} } { \int_eval:n {#3} }
+    \prop_put:Nee #1 { \int_eval:n {#3} } { \int_eval:n {#2} }
+  }
+
+% Follow a strand from vertex #1, leaving through side #2 (R or L).
+% Stops at a boundary point, or (for closed loops) back at the start.
+\cs_new_protected:Npn \__tldiag_walk:nn #1#2
+  {
+    \int_set:Nn \l__tldiag_v_int {#1}
+    \int_set:Nn \l__tldiag_start_int {#1}
+    \str_if_eq:nnTF {#2} { R }
+      { \bool_set_true:N \l__tldiag_right_bool }
+      { \bool_set_false:N \l__tldiag_right_bool }
+    \bool_if:NT \l__tldiag_draw_bool
+      {
+        \tl_set:Ne \l__tldiag_path_tl
+          {
+            \exp_not:N \draw [ tl~strand ]
+              \__tldiag_vertex_pt:n { \l__tldiag_v_int }
+          }
+      }
+    \bool_set_true:N \l__tldiag_go_bool
+    \bool_do_while:Nn \l__tldiag_go_bool
+      {
+        \prop_put:Nen \l__tldiag_visited_prop
+          { \int_use:N \l__tldiag_v_int } { }
+        \int_set:Nn \l__tldiag_c_int
+          { \int_div_truncate:nn { \l__tldiag_v_int } { \l__tldiag_n_int } }
+        \bool_if:nTF
+          {
+            ( \l__tldiag_right_bool &&
+              \int_compare_p:nNn \l__tldiag_c_int = \l__tldiag_m_int ) ||
+            ( ! \l__tldiag_right_bool &&
+              \int_compare_p:nNn \l__tldiag_c_int = 0 )
+          }
+          { \bool_set_false:N \l__tldiag_go_bool }
+          {
+            \bool_if:NTF \l__tldiag_right_bool
+              {
+                \prop_get:NeN \l__tldiag_R_prop
+                  { \int_use:N \l__tldiag_v_int } \l__tldiag_tmp_tl
+              }
+              {
+                \prop_get:NeN \l__tldiag_L_prop
+                  { \int_use:N \l__tldiag_v_int } \l__tldiag_tmp_tl
+              }
+            \int_set:Nn \l__tldiag_w_int { \l__tldiag_tmp_tl }
+            \int_compare:nNnTF
+              { \int_div_truncate:nn { \l__tldiag_w_int } { \l__tldiag_n_int } }
+              = \l__tldiag_c_int
+              {
+                \bool_if:NT \l__tldiag_draw_bool { \__tldiag_path_arc: }
+                \bool_set_inverse:N \l__tldiag_right_bool
+              }
+              {
+                \bool_if:NT \l__tldiag_draw_bool
+                  {
+                    \tl_put_right:Ne \l__tldiag_path_tl
+                      { -- \__tldiag_vertex_pt:n { \l__tldiag_w_int } }
+                  }
+              }
+            \int_set_eq:NN \l__tldiag_v_int \l__tldiag_w_int
+            \int_compare:nNnT \l__tldiag_v_int = \l__tldiag_start_int
+              {
+                \bool_set_false:N \l__tldiag_go_bool
+                \bool_if:NT \l__tldiag_draw_bool
+                  { \tl_put_right:Nn \l__tldiag_path_tl { -- cycle } }
+              }
+          }
+      }
+    \bool_if:NT \l__tldiag_draw_bool
+      {
+        \tl_put_right:Nn \l__tldiag_path_tl { ; }
+        \tl_put_right:NV \l__tldiag_draw_tl \l__tldiag_path_tl
+      }
+  }
+
+% Page position of vertex #1 in the unreduced (composed) picture.
+\cs_new:Npn \__tldiag_vertex_pt:n #1
+  {
+    \__tldiag_pt:nn
+      { \int_div_truncate:nn {#1} { \l__tldiag_n_int } * \l__tldiag_L_fp }
+      { \__tldiag_s:n { \int_mod:nn {#1} { \l__tldiag_n_int } + 1 } }
+  }
+% Cup (leaving to the right) or cap (leaving to the left) from v to w.
+\cs_new_protected:Npn \__tldiag_path_arc:
+  {
+    \tl_put_right:Ne \l__tldiag_path_tl
+      {
+        .. ~ controls ~
+        \__tldiag_pt:nn
+          {
+            \l__tldiag_c_int * \l__tldiag_L_fp
+            \bool_if:NTF \l__tldiag_right_bool { + } { - }
+            2 * \l__tldiag_S_fp / 3
+          }
+          { \__tldiag_s:n { \int_mod:nn { \l__tldiag_v_int } { \l__tldiag_n_int } + 1 } }
+        ~ and ~
+        \__tldiag_pt:nn
+          {
+            \l__tldiag_c_int * \l__tldiag_L_fp
+            \bool_if:NTF \l__tldiag_right_bool { + } { - }
+            2 * \l__tldiag_S_fp / 3
+          }
+          { \__tldiag_s:n { \int_mod:nn { \l__tldiag_w_int } { \l__tldiag_n_int } + 1 } }
+        ~ .. ~
+        \__tldiag_vertex_pt:n { \l__tldiag_w_int }
+      }
+  }
+
+% Boundary label (L<j> or R<j>) of boundary vertex #1.
+\cs_new:Npn \__tldiag_label:n #1
+  {
+    \int_compare:nNnTF
+      { \int_div_truncate:nn {#1} { \l__tldiag_n_int } } = 0 { L } { R }
+    \int_eval:n { \int_mod:nn {#1} { \l__tldiag_n_int } + 1 }
+  }
+
+\cs_new_protected:Npn \__tldiag_trace:
+  {
+    \prop_clear:N \l__tldiag_R_prop
+    \prop_clear:N \l__tldiag_L_prop
+    \prop_clear:N \l__tldiag_visited_prop
+    \prop_clear:N \l__tldiag_match_prop
+    \int_zero:N \l__tldiag_k_int
+    \seq_map_inline:Nn \l__tldiag_word_seq
+      {
+        \int_incr:N \l__tldiag_k_int
+        \__tldiag_add_edges:n {##1}
+      }
+    \__tldiag_trace_boundary:nn { 0 } { R }
+    \__tldiag_trace_boundary:nn
+      { \l__tldiag_m_int * \l__tldiag_n_int } { L }
+    \int_zero:N \l__tldiag_loops_int
+    \int_step_inline:nnn
+      { \l__tldiag_n_int }
+      { \l__tldiag_m_int * \l__tldiag_n_int - 1 }
+      {
+        \prop_if_in:NeF \l__tldiag_visited_prop {##1}
+          {
+            \int_incr:N \l__tldiag_loops_int
+            \__tldiag_walk:nn {##1} { R }
+          }
+      }
+  }
+\cs_new_protected:Npn \__tldiag_trace_boundary:nn #1#2
+  {
+    \int_step_inline:nnn {#1} { #1 + \l__tldiag_n_int - 1 }
+      {
+        \prop_if_in:NeF \l__tldiag_visited_prop {##1}
+          {
+            \__tldiag_walk:nn {##1} {#2}
+            \tl_set:Ne \l__tldiag_tmp_tl { \__tldiag_label:n {##1} }
+            \tl_set:Ne \l__tldiag_tmpb_tl
+              { \__tldiag_label:n { \l__tldiag_v_int } }
+            \prop_put:NVV \l__tldiag_match_prop
+              \l__tldiag_tmp_tl \l__tldiag_tmpb_tl
+            \prop_put:NVV \l__tldiag_match_prop
+              \l__tldiag_tmpb_tl \l__tldiag_tmp_tl
+          }
+      }
+  }
+
+% Nesting level of every cup (left side) and cap (right side), smallest first.
+\cs_new_protected:Npn \__tldiag_levels:
+  {
+    \prop_clear:N \l__tldiag_level_prop
+    \int_zero:N \l__tldiag_maxL_int
+    \int_zero:N \l__tldiag_maxR_int
+    \__tldiag_levels_side:nN { L } \l__tldiag_maxL_int
+    \__tldiag_levels_side:nN { R } \l__tldiag_maxR_int
+  }
+\cs_new_protected:Npn \__tldiag_levels_side:nN #1#2
+  {
+    \int_step_inline:nn { \l__tldiag_n_int - 1 }
+      {
+        \int_step_inline:nn { \l__tldiag_n_int - ##1 }
+          { \__tldiag_level_check:nnnN {#1} {####1} { ####1 + ##1 } #2 }
+      }
+  }
+\cs_new_protected:Npn \__tldiag_level_check:nnnN #1#2#3#4
+  {
+    \prop_get:NeN \l__tldiag_match_prop { #1 \int_eval:n {#2} }
+      \l__tldiag_tmp_tl
+    \str_if_eq:eeT { \l__tldiag_tmp_tl } { #1 \int_eval:n {#3} }
+      {
+        \int_set:Nn \l__tldiag_lvl_int { 1 }
+        \int_step_inline:nnn { #2 + 1 } { #3 - 1 }
+          {
+            \prop_get:NeNT \l__tldiag_level_prop { #1 ##1 } \l__tldiag_tmpb_tl
+              {
+                \int_set:Nn \l__tldiag_lvl_int
+                  { \int_max:nn { \l__tldiag_lvl_int } { \l__tldiag_tmpb_tl + 1 } }
+              }
+          }
+        \prop_put:Nee \l__tldiag_level_prop
+          { #1 \int_eval:n {#2} } { \int_use:N \l__tldiag_lvl_int }
+        \int_set:Nn #4 { \int_max:nn {#4} { \l__tldiag_lvl_int } }
+      }
+  }
+
+% ---------------------------------------------------------------------------
+% Drawing
+% ---------------------------------------------------------------------------
+\cs_new_protected:Npn \__tldiag_measure:n #1
+  {
+    \hbox_set:Nn \l__tldiag_tmp_box {#1}
+    \fp_set:Nn \l__tldiag_wd_fp
+      {
+        \dim_to_fp:n { \box_wd:N \l__tldiag_tmp_box }
+        / \dim_to_fp:n { 1cm } / \l__tldiag_scale_fp
+      }
+  }
+
+\cs_new_protected:Npn \__tldiag_draw_box:
+  {
+    \__tldiag_emit:n
+      {
+        \exp_not:N \path [ \exp_not:V \l__tldiag_box_tl , tl~box ]
+          \__tldiag_pt:nn { 0 } { 0 } ~ rectangle ~
+          \__tldiag_pt:nn { \l__tldiag_T_fp }
+            { \l__tldiag_n_int * \l__tldiag_S_fp } ;
+      }
+  }
+
+\cs_new_protected:Npn \__tldiag_draw_labels:
+  {
+    \bool_if:NT \l__tldiag_labels_bool
+      {
+        \int_step_inline:nn { \l__tldiag_n_int }
+          {
+            \__tldiag_emit:n
+              {
+                \exp_not:N \node [ tl~label ] ~ at ~
+                  \__tldiag_pt:nn { -0.18 } { \__tldiag_s:n {##1} } {##1} ;
+              }
+          }
+      }
+  }
+
+% Name of generator #1 as math.
+\cs_new:Npn \__tldiag_gen_name:n #1
+  {
+    \int_compare:nNnTF {#1} = 0
+      { 1 }
+      { e \c_math_subscript_token { #1 } }
+  }
+
+% Queue a name node below position x = #1 (page coordinates).
+\cs_new_protected:Npn \__tldiag_name:nn #1#2
+  {
+    \tl_put_right:Ne \l__tldiag_names_tl
+      {
+        \exp_not:N \node [ tl~name ] ~ at ~
+          ( tlsouth ~ -| ~ \fp_eval:n { round ( #1 , 4 ) } , 0 )
+          { $ #2 $ } ;
+      }
+  }
+
+\cs_new_protected:Npn \__tldiag_factor:n #1
+  {
+    \seq_set_from_clist:Nn \l__tldiag_word_seq {#1}
+    \seq_if_empty:NT \l__tldiag_word_seq
+      { \seq_put_right:Nn \l__tldiag_word_seq { 0 } }
+    \int_set:Nn \l__tldiag_m_int { \seq_count:N \l__tldiag_word_seq }
+    \__tldiag_trace:
+    \int_gadd:Nn \g__tldiag_loops_int { \l__tldiag_loops_int }
+    \bool_if:NTF \l__tldiag_reduce_bool
+      { \__tldiag_reduced_factor: }
+      { \__tldiag_composed_factor: }
+    \fp_add:Nn \l__tldiag_off_fp { \__tldiag_page_width: }
+  }
+
+% The word drawn as it is: one column per generator, closed loops included.
+\cs_new_protected:Npn \__tldiag_composed_factor:
+  {
+    \fp_set:Nn \l__tldiag_T_fp { \l__tldiag_m_int * \l__tldiag_L_fp }
+    \__tldiag_draw_box:
+    \bool_if:NT \l__tldiag_boundaries_bool
+      {
+        \int_step_inline:nn { \l__tldiag_m_int - 1 }
+          {
+            \__tldiag_emit:n
+              {
+                \exp_not:N \draw [ tl~boundary ]
+                  \__tldiag_pt:nn { ##1 * \l__tldiag_L_fp } { 0 } --
+                  \__tldiag_pt:nn { ##1 * \l__tldiag_L_fp }
+                    { \l__tldiag_n_int * \l__tldiag_S_fp } ;
+              }
+          }
+      }
+    \bool_set_true:N \l__tldiag_draw_bool
+    \__tldiag_trace:
+    \bool_set_false:N \l__tldiag_draw_bool
+    \int_zero:N \l__tldiag_k_int
+    \seq_map_inline:Nn \l__tldiag_word_seq
+      {
+        \bool_if:NT \l__tldiag_names_bool
+          {
+            \bool_if:NF \l__tldiag_vertical_bool
+              {
+                \__tldiag_name:nn
+                  { \__tldiag_x:nn { ( \l__tldiag_k_int + 0.5 ) * \l__tldiag_L_fp } { 0 } }
+                  { \__tldiag_gen_name:n {##1} }
+              }
+          }
+        \int_incr:N \l__tldiag_k_int
+      }
+    \bool_lazy_and:nnT \l__tldiag_names_bool \l__tldiag_vertical_bool
+      { \__tldiag_word_name: }
+    \__tldiag_draw_labels:
+  }
+
+\cs_new_protected:Npn \__tldiag_word_name:
+  {
+    \tl_clear:N \l__tldiag_word_tl
+    \seq_map_inline:Nn \l__tldiag_word_seq
+      {
+        \int_compare:nNnF {##1} = 0
+          { \tl_put_right:Ne \l__tldiag_word_tl { \__tldiag_gen_name:n {##1} } }
+      }
+    \tl_if_empty:NT \l__tldiag_word_tl
+      { \tl_set:Nn \l__tldiag_word_tl { 1 } }
+    \__tldiag_name:nn
+      { \l__tldiag_off_fp + ( \__tldiag_page_width: ) / 2 }
+      { \exp_not:V \l__tldiag_word_tl }
+  }
+
+% The reduced diagram (a planar matching) with its loop factor.
+\cs_new_protected:Npn \__tldiag_reduced_factor:
+  {
+    \__tldiag_levels:
+    \int_zero:N \l__tldiag_shift_int
+    \int_step_inline:nn { \l__tldiag_n_int }
+      {
+        \prop_get:NeN \l__tldiag_match_prop { L ##1 } \l__tldiag_tmp_tl
+        \str_if_eq:eeT { \str_head:N \l__tldiag_tmp_tl } { R }
+          {
+            \int_set:Nn \l__tldiag_shift_int
+              {
+                \int_max:nn { \l__tldiag_shift_int }
+                  { \int_abs:n { ##1 - \str_tail:N \l__tldiag_tmp_tl } }
+              }
+          }
+      }
+    \fp_set:Nn \l__tldiag_Dl_fp
+      { \l__tldiag_maxL_int * \l__tldiag_S_fp / 2 }
+    \fp_set:Nn \l__tldiag_Dr_fp
+      { \l__tldiag_maxR_int * \l__tldiag_S_fp / 2 }
+    \fp_set:Nn \l__tldiag_T_fp
+      {
+        max ( \l__tldiag_L_fp ,
+          \l__tldiag_Dl_fp + \l__tldiag_Dr_fp +
+          ( \l__tldiag_shift_int > 0 ?
+            \l__tldiag_S_fp * max ( 1 , 0.75 * \l__tldiag_shift_int ) :
+            \l__tldiag_S_fp / 2 ) )
+      }
+    \bool_lazy_and:nnT
+      { \l__tldiag_coefficient_bool }
+      { \int_compare_p:nNn \l__tldiag_loops_int > 0 }
+      {
+        \tl_set:Ne \l__tldiag_tmp_tl
+          {
+            \exp_not:V \l__tldiag_loop_tl
+            \int_compare:nNnT \l__tldiag_loops_int > 1
+              { \c_math_superscript_token { \int_use:N \l__tldiag_loops_int } }
+          }
+        \__tldiag_measure:n { $ \l__tldiag_tmp_tl $ }
+        \__tldiag_emit:n
+          {
+            \exp_not:N \node [ tl~coefficient ] ~ at ~
+              ( \fp_eval:n { round ( \l__tldiag_off_fp + \l__tldiag_wd_fp , 4 ) } , 0 )
+              { \exp_not:N \ensuremath { \exp_not:V \l__tldiag_tmp_tl } } ;
+          }
+        \fp_add:Nn \l__tldiag_off_fp { \l__tldiag_wd_fp + 0.1 }
+      }
+    \__tldiag_draw_box:
+    \prop_map_inline:Nn \l__tldiag_level_prop
+      {
+        \prop_get:NnN \l__tldiag_match_prop {##1} \l__tldiag_tmp_tl
+        \str_if_eq:eeTF { \str_head:n {##1} } { L }
+          {
+            \__tldiag_arc:nnnn { 0 }
+              { 2 * ##2 * \l__tldiag_S_fp / 3 }
+              { \str_tail:n {##1} } { \str_tail:N \l__tldiag_tmp_tl }
+          }
+          {
+            \__tldiag_arc:nnnn { \l__tldiag_T_fp }
+              { - 2 * ##2 * \l__tldiag_S_fp / 3 }
+              { \str_tail:n {##1} } { \str_tail:N \l__tldiag_tmp_tl }
+          }
+      }
+    \int_step_inline:nn { \l__tldiag_n_int }
+      {
+        \prop_get:NeN \l__tldiag_match_prop { L ##1 } \l__tldiag_tmp_tl
+        \str_if_eq:eeT { \str_head:N \l__tldiag_tmp_tl } { R }
+          { \__tldiag_through:ne {##1} { \str_tail:N \l__tldiag_tmp_tl } }
+      }
+    \bool_if:NT \l__tldiag_names_bool { \__tldiag_word_name: }
+    \__tldiag_draw_labels:
+  }
+
+% Through strand from strand #1 on the left to strand #2 on the right.
+\cs_new_protected:Npn \__tldiag_through:nn #1#2
+  {
+    \int_compare:nNnTF {#1} = {#2}
+      { \__tldiag_line:nnn { 0 } { \l__tldiag_T_fp } {#1} }
+      {
+        \__tldiag_emit:n
+          {
+            \exp_not:N \draw [ tl~strand ]
+              \__tldiag_pt:nn { 0 } { \__tldiag_s:n {#1} } --
+              \__tldiag_pt:nn { \l__tldiag_Dl_fp } { \__tldiag_s:n {#1} }
+              .. ~ controls ~
+              \__tldiag_pt:nn
+                { ( \l__tldiag_Dl_fp + \l__tldiag_T_fp - \l__tldiag_Dr_fp ) / 2 }
+                { \__tldiag_s:n {#1} }
+              ~ and ~
+              \__tldiag_pt:nn
+                { ( \l__tldiag_Dl_fp + \l__tldiag_T_fp - \l__tldiag_Dr_fp ) / 2 }
+                { \__tldiag_s:n {#2} }
+              ~ .. ~
+              \__tldiag_pt:nn
+                { \l__tldiag_T_fp - \l__tldiag_Dr_fp } { \__tldiag_s:n {#2} } --
+              \__tldiag_pt:nn { \l__tldiag_T_fp } { \__tldiag_s:n {#2} } ;
+          }
+      }
+  }
+\cs_generate_variant:Nn \__tldiag_through:nn { ne }
+
+\cs_new_protected:Npn \__tldiag_render:
+  {
+    \tl_clear:N \l__tldiag_draw_tl
+    \tl_clear:N \l__tldiag_names_tl
+    \fp_zero:N \l__tldiag_off_fp
+    \int_gzero:N \g__tldiag_loops_int
+    \bool_set_true:N \l__tldiag_first_bool
+    \seq_map_inline:Nn \l__tldiag_factors_seq
+      {
+        \bool_if:NF \l__tldiag_first_bool { \__tldiag_separator: }
+        \bool_set_false:N \l__tldiag_first_bool
+        \__tldiag_factor:n {##1}
+      }
+    \tl_if_empty:NF \l__tldiag_names_tl
+      {
+        \tl_put_right:Nn \l__tldiag_draw_tl
+          { \coordinate (tlsouth) ~ at ~ (current~bounding~box.south) ; }
+        \tl_put_right:NV \l__tldiag_draw_tl \l__tldiag_names_tl
+      }
+    \tl_set:Ne \l__tldiag_opts_tl
+      {
+        baseline = { \exp_not:V \l__tldiag_baseline_tl }
+        \exp_not:V \l__tldiag_tikz_tl
+      }
+    \__tldiag_picture:VV \l__tldiag_opts_tl \l__tldiag_draw_tl
+  }
+\cs_new_protected:Npn \__tldiag_separator:
+  {
+    \tl_if_blank:VTF \l__tldiag_separator_tl
+      { \fp_add:Nn \l__tldiag_off_fp { \l__tldiag_gap_fp } }
+      {
+        \__tldiag_measure:n { $ \l__tldiag_separator_tl $ }
+        \__tldiag_emit:n
+          {
+            \exp_not:N \node [ tl~separator ] ~ at ~
+              ( \fp_eval:n
+                  { round ( \l__tldiag_off_fp + \l__tldiag_gap_fp
+                      + \l__tldiag_wd_fp / 2 , 4 ) } , 0 )
+              { \exp_not:N \ensuremath { \exp_not:V \l__tldiag_separator_tl } } ;
+          }
+        \fp_add:Nn \l__tldiag_off_fp
+          { 2 * \l__tldiag_gap_fp + \l__tldiag_wd_fp }
+      }
+  }
+\cs_new_protected:Npn \__tldiag_picture:nn #1#2
+  { \begin{tikzpicture} [ #1 ] #2 \end{tikzpicture} }
+\cs_generate_variant:Nn \__tldiag_picture:nn { VV }
+
+\cs_new_protected:Npn \__tldiag_setup:nn #1#2
+  {
+    \keys_set:nn { temperleylieb } {#1}
+    \regex_match:NnTF \c__tldiag_int_regex {#2}
+      {
+        \int_set:Nn \l__tldiag_n_int {#2}
+        \int_compare:nNnF \l__tldiag_n_int > 0
+          {
+            \msg_error:nnn { temperleylieb } { bad-n } {#2}
+            \int_set:Nn \l__tldiag_n_int { 1 }
+          }
+      }
+      {
+        \msg_error:nnn { temperleylieb } { bad-n } {#2}
+        \int_set:Nn \l__tldiag_n_int { 1 }
+      }
+  }
+
+% ---------------------------------------------------------------------------
+% User interface
+% ---------------------------------------------------------------------------
+\NewDocumentCommand \tlset { m }
+  { \keys_set:nn { temperleylieb } {#1} }
+
+\NewDocumentCommand \TLdiagram { O{} m m }
+  {
+    \group_begin:
+      \__tldiag_setup:nn {#1} {#2}
+      \__tldiag_parse:n {#3}
+      \__tldiag_render:
+    \group_end:
+  }
+
+\NewDocumentCommand \TLgenerators { s O{} m }
+  {
+    \group_begin:
+      \__tldiag_setup:nn {#2} {#3}
+      \bool_set_true:N \l__tldiag_separate_bool
+      \seq_clear:N \l__tldiag_factors_seq
+      \IfBooleanTF {#1}
+        { \int_set:Nn \l__tldiag_k_int { 1 } }
+        { \int_zero:N \l__tldiag_k_int }
+      \int_step_inline:nnn { \l__tldiag_k_int } { \l__tldiag_n_int - 1 }
+        { \seq_put_right:Nn \l__tldiag_factors_seq {##1} }
+      \seq_if_empty:NT \l__tldiag_factors_seq
+        { \seq_put_right:Nn \l__tldiag_factors_seq { 0 } }
+      \__tldiag_render:
+    \group_end:
+  }
+
+\NewExpandableDocumentCommand \TLlastloops { }
+  { \int_use:N \g__tldiag_loops_int }
+
+\cs_if_free:NT \TL
+  {
+    \NewDocumentCommand \TL { O{} m m } { \TLdiagram [#1] {#2} {#3} }
+  }
+
+% ---------------------------------------------------------------------------
+% TikZ styles (customise with \tikzset)
+% ---------------------------------------------------------------------------
+\ExplSyntaxOff
+\definecolor{tllightblue}{RGB}{173,216,230}
+\tikzset{
+  tl strand/.style={line width=0.9pt, line cap=butt},
+  tl box/.style={},
+  tl box frame/.style={draw=black!35, line width=0.4pt},
+  tl box fill/.style={fill=tllightblue},
+  tl box none/.style={},
+  tl boundary/.style={draw=black!40, densely dashed, line width=0.3pt},
+  tl label/.style={font=\scriptsize, inner sep=1pt, text=black!70},
+  tl name/.style={anchor=north, inner sep=0pt, yshift=-4pt, font=\small},
+  tl separator/.style={anchor=mid, inner sep=0pt},
+  tl coefficient/.style={anchor=mid east, inner sep=0pt},
+}
+\ExplSyntaxOn

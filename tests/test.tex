@@ -1,0 +1,28 @@
+\documentclass{article}
+\usepackage[margin=2cm]{geometry}
+\usepackage{temperleylieb}
+\begin{document}
+
+Generators: \TLgenerators[separate, names]{5}
+
+Product: \(\TL{5}{e_1 e_4 e_3 e_2} \times \TL{5}{e_2 e_4 e_3}
+  = \TL{5}{e_1 e_4 e_3 e_2 e_2 e_4 e_3}
+  = \TL[reduce]{5}{e_1 e_4 e_3 e_2 e_2 e_4 e_3}\) loops: \TLlastloops
+
+Bars: \TL[separator=\times]{5}{e_1 e_4 e_3 e_2 | e_2 e_4 e_3}
+
+Separate: \TL[separate, names]{4}{e_1 e_2 {e_1 e_3} 1}
+
+Vertical: \TL[vertical, names]{4}{e_1 e_2 e_3}
+\TL[vertical, reduce, names]{4}{e_1 e_2 e_3}
+\TL[vertical, reverse, boundaries]{4}{e_1 e_2 e_3}
+
+TL3 basis: \TL[separate, reduce, box=fill, names]{3}{1 e_2 e_1 {e_1e_2} {e_2e_1}}
+
+Loops: \(\TL[boundaries, labels]{3}{e_1 e_1 e_1} = \TL[reduce]{3}{e_1e_1e_1}\)
+
+Big: \TL[reduce]{6}{e_3 e_2 e_4 e_1 e_3 e_5 e_2 e_4 e_3} \quad
+\TL{6}{e_3 e_2 e_4 e_1 e_3 e_5 e_2 e_4 e_3}
+
+Index: \TL{12}{e_{11} e_{10}}
+\end{document}
