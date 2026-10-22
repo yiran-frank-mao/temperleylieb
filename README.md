@@ -26,6 +26,8 @@ The last diagram is computed: the package traces the strands, removes closed loo
   draws \(1, e_1, \dots, e_{n-1}\).
 - **Horizontal or vertical**: `horizontal` (the default, left to right) or `vertical`
   (top to bottom). `reverse` flips the direction.
+- **Standalone pictures**: with `\documentclass[tikz]{standalone}`, every `\[...\]` or `\(...\)`
+  containing diagrams becomes one cropped page (diagrams outside formulas are pages of their own).
 - **Extras**: `names` (generator names under the diagram), `labels` (strand numbers),
   `boundaries` (dashed seams), `box=frame|fill|none`, `strand sep`, `length`, `scale`,
   `strand style`, `loop value`, and TikZ styles (`tl strand`, `tl box`, …) for full control.
@@ -53,6 +55,7 @@ or newer and TikZ, and works with pdfLaTeX, XeLaTeX and LuaLaTeX.
 ```sh
 make            # builds temperleylieb-doc.pdf and examples/wikipedia.pdf
 make test       # cross-checks the reduction against a Python reference on random words
+                # and checks the pages produced with the standalone class
 ```
 
 On Debian/Ubuntu the required TeX packages are
@@ -66,6 +69,7 @@ On Debian/Ubuntu the required TeX packages are
 | `temperleylieb-doc.tex` / `.pdf` | user manual with live examples |
 | `examples/wikipedia.tex` / `.pdf` | the Wikipedia figures redrawn with the package |
 | `tests/check_reduce.py` | randomized test of the composition/reduction algorithm |
+| `tests/check_standalone.py` | compiles diagrams with the `standalone` class and checks the pages |
 | `tests/test.tex` | visual smoke test |
 
 Licensed under the LaTeX Project Public License 1.3c.
