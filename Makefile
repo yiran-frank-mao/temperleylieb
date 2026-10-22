@@ -20,6 +20,7 @@ examples/wikipedia.pdf: examples/wikipedia.tex temperleylieb.sty
 test:
 	python3 tests/check_reduce.py 1
 	python3 tests/check_reduce.py 2
+	python3 tests/check_standalone.py
 
 clean:
 	rm -f *.aux *.log *.out *.toc examples/*.aux examples/*.log tests/*.aux tests/*.log

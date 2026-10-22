@@ -210,6 +210,31 @@ colour \texttt{tllightblue} is used by \opt{box=fill}.
    \TL{4}{e_1 e_3} = \TL{4}{e_3 e_1} \]
 \endgroup
 
+\section{Single pictures with the \textsf{standalone} class}
+
+The class option \opt{tikz} of \textsf{standalone} makes every Ti\emph{k}Z
+picture a cropped page of its own. A diagram is part of a formula, so in such
+documents the package makes the formula the page instead: every
+\verb|\[...\]| and \verb|\(...\)| becomes one cropped page (this is the
+class option \opt{math} of \textsf{standalone}, which is switched on
+automatically), and the diagrams inside it are ordinary parts of the formula.
+Diagrams outside formulas are still pages of their own.
+
+\begin{code}
+\documentclass[tikz, border=1pt]{standalone}
+\usepackage{amsmath,temperleylieb}
+\begin{document}
+\[ \TL{5}{e_1 e_4 e_3 e_2} \cdot \TL{5}{e_2 e_4 e_3}
+   = \TL[reduce]{5}{e_1 e_4 e_3 e_2 e_2 e_4 e_3} \]
+\end{document}
+\end{code}
+
+Other formulas, such as \verb|$...$| or \verb|equation*|, are not pages for
+\textsf{standalone}; a diagram in one of them gives a warning. Write the
+formula with \verb|\[...\]| or \verb|\(...\)|, or use
+\verb|\documentclass[varwidth]{standalone}|, which puts the whole document on
+one cropped page.
+
 \section{How the reduction works}
 
 A word $e_{g_1}\cdots e_{g_m}$ is turned into a graph on the points
